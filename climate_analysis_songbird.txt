@@ -1,0 +1,97 @@
+# Filter out samples not used in data
+
+qiime feature-table filter-samples \
+  --i-table GMTOL_table.qza \
+  --m-metadata-file V3-V4.tsv \
+  --o-filtered-table V3-V4_table.qza
+
+# Run songbird to create model for data based on chosen variables
+# Formula was created from relevant environmental variables while being controlled for phylum
+
+qiime songbird multinomial \
+	--i-table V3-V4_table.qza \
+	--m-metadata-file V3-V4.tsv \
+	--p-formula "Phylum+Latitude+Precipitation+Temp_Min+Temp_Max+Temp_Mean+Rel_Hum+Wind+ETo" \
+	--p-epochs 10000 \
+	--p-differential-prior 0.5 \
+	--p-summary-interval 1 \
+	--p-num-random-test-examples 100 \
+	--o-differentials V3-V4-pltrws-differentials.qza \
+	--o-regression-stats V3-V4-pltrws-regression-stats.qza \
+	--o-regression-biplot V3-V4-pltrws-regression-biplot.qza \
+	--verbose
+
+# Create visualization for regression model
+
+qiime songbird summarize-single \
+	--i-regression-stats V3-V4-pltrws-regression-stats.qza \
+	--o-visualization V3-V4-pltrws-regression-summary.qzv
+
+# Create null model to compare model against
+
+qiime songbird multinomial \
+	--i-table V3-V4_table.qza \
+	--m-metadata-file V3-V4.tsv \
+	--p-formula 1 \
+	--p-epochs 10000 \
+	--p-differential-prior 0.5 \
+	--p-summary-interval 1 \
+	--o-differentials V3-V4-null-differentials.qza \
+	--o-regression-stats V3-V4-null-regression-stats.qza \
+	--o-regression-biplot V3-V4-null-regression-biplot.qza \
+	--verbose
+
+# Compare model against null model
+
+qiime songbird summarize-paired \
+	--i-regression-stats V3-V4-pltrws-regression-stats.qza \
+	--i-baseline-stats V3-V4-null-regression-stats.qza \
+	--o-visualization V3-V4-null-paired-summary.qzv
+
+# Create table for differentials
+
+qiime metadata tabulate \
+	--m-input-file V3-V4-pltrws-differentials.qza \
+	--o-visualization V3-V4-pltrws-differentials.qzv
+
+# Create visualization for taxonomy
+
+qiime metadata tabulate \
+  --m-input-file GMTOL_taxonomy2.qza \
+  --o-visualization GMTOL_taxonomy2.qzv
+
+# Visualize differentials using qiime qurro
+
+qiime qurro loading-plot \
+    --i-table V3-V4-pltrws-differentials.qza \
+    --i-ranks V3-V4-pltrws-differentials.qza \
+    --m-sample-metadata-file V3-V4.tsv \
+    --m-feature-metadata-file GMTOL_taxonomy2.qza \
+    --o-visualization V3-V4-pltrws-qurro.qzv \
+    --verbose
+
+# Create visualization for qiime qurro
+
+qiime qurro differential-plot \
+    --i-ranks V3-V4-pltrws-differentials.qza \
+    --i-table V3-V4_table.qza \
+    --m-sample-metadata-file V3-V4.tsv \
+    --m-feature-metadata-file GMTOL_taxonomy2.qza \
+    --verbose \
+    --o-visualization V3-V4-pltrws-qurro.qzv
+
+# Create taxonomy for V3-V4 samples
+
+qiime feature-classifier classify-sklearn \
+  --i-classifier gg-13-8-99-515-806-nb-classifier.qza \
+  --i-reads V3-V4_table.qza \
+  --o-classification V3-V4-taxonomy.qza
+
+# Visualize biplot in qiime emperor
+
+qiime emperor biplot \
+	--i-biplot V3-V4-pltrws-regression-biplot.qza \
+	--m-sample-metadata-file V3-V4-pltrws-septaxondiff.tsv \
+	--p-ignore-missing-samples \
+	--p-number-of-features 9 \
+	--o-visualization V3-V4-ptrws-emperor-biplot-sep-taxon
